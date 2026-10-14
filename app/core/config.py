@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     secret_key: str = "change-me-in-env"
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 720  # 12h: covers an owner working day
+    upload_dir: str = "data/uploads"  # S4: recorded-video storage (gitignored)
+    max_video_mb: int = 50  # S4: MVP upload cap (assumption, matches service)
 
 
 settings = Settings()

@@ -2,6 +2,7 @@ from fastapi import FastAPI
 
 from app.api.routes.auth import router as auth_router
 from app.api.routes.queue_sessions import router as queue_sessions_router
+from app.api.routes.vision import router as vision_router
 from app.core.config import settings
 from app.database.base import Base
 from app.database.session import engine
@@ -14,6 +15,7 @@ Base.metadata.create_all(bind=engine)
 
 app.include_router(auth_router)
 app.include_router(queue_sessions_router)
+app.include_router(vision_router)
 
 
 @app.get("/health")

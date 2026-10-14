@@ -7,3 +7,8 @@ pytest
 httpx
 bcrypt
 PyJWT
+python-multipart  # recorded-video upload parsing (UploadFile)
+opencv-python-headless  # S4 video frame sampling (no GUI deps)
+# NOTE (S4): ultralytics (YOLOv8n backend) intentionally NOT pinned yet —
+# it pulls torch (~200MB+ CPU wheel) + model download. The vision service
+# lazy-loads it and returns HTTP 503 with an install hint until then.
