@@ -3,14 +3,14 @@
 This is how future sessions know where we left off. Update at end of each work block.
 
 ## Last updated
-2026-10-14 — S2 DB Models + Auth DONE (14 pytest passed)
+2026-10-14 — S3 Queue Sessions + Wait Formula DONE (32 pytest passed)
 
 ## SDLC progress
 - [x] Phase 1: Requirements Analysis + Scope Freeze — DONE (see docs/project-context.md §5-7)
 - [x] Phase 2: System Design — DONE (arch, DB, API, vision constraints, see docs/project-context.md §9-12)
 - [x] S1 Foundation: git init, venv (py3.10.10), requirements (fastapi/sqlalchemy/pytest), FastAPI + /health, SQLite base, pytest 1 passed — DONE
 - [x] S2: DB Models + Auth — DONE (owner/session/token/snapshot models, bcrypt + JWT Bearer, register/login/me, ownership guard, 14 pytest passed)
-- [ ] S3: Queue Sessions + Wait Formula
+- [ ] S3: Queue Sessions + Wait Formula — DONE (waiting_time_service, session CRUD/settings/status/activate, 32 pytest passed)
 - [ ] S4: Vision Pipeline (upload + YOLO)
 - [ ] S5: Virtual Queue + Tokens
 - [ ] S6: Frontend Owner + Customer
@@ -27,10 +27,12 @@ This is how future sessions know where we left off. Update at end of each work b
 - S2 guards: ownership helper `get_owned_session()` returns 404 for foreign/missing sessions (no existence leak); `tracking_id` default `secrets.token_urlsafe(32)`, unique; token_number unique per session only.
 - S2 note: PyJWT warns dev-default SECRET_KEY <32 bytes; `.env.example` now says production needs >=32 chars.
 - S2 test fix: `test_tracking_ids_unique_and_unguessable` used a substring check that failed when the random ID contained the digit 1; replaced with exact inequality (`tracking_id != str(id)`). Suite now 14 passed.
+- S3 DONE: `app/services/waiting_time_service.py` (pure `estimate_wait_minutes` with zero-counter→None guard, negatives→ValueError, missing→None; `session_people_ahead` = physical + active virtual; advisory-only `recommend_virtual_queue`, threshold param default 10); `app/schemas/queue.py` (SessionCreate/SettingsUpdate/Out/StatusOut, StatusOut carries estimate_note + threshold); `app/api/routes/queue_sessions.py` (POST/GET list/GET status/PATCH settings/POST activate, all owner-auth + `get_owned_session` 404 guard). 32 pytest passed (14 S2 + 8 wait-unit + 10 session-API).
+- S3 assumptions: recommendation threshold default 10 people-ahead (no spec value; param-overridable); people_ahead counts token statuses waiting/called only (served/cancelled excluded); wait rounded to 2dp; activate is idempotent 200 but 409 on closed sessions; settings cannot toggle virtual flag (explicit endpoint only); deactivation endpoint left as future gap.
 
 ## Open questions for Phase 3+
 - YOLO model version + hardware check (propose YOLOv8n, verify license/install).
 - QR generation library choice.
 
 ## Next step
-S3 NEXT: Queue Sessions + Wait Formula (session CRUD, settings, wait calc with zero-guard).
+S4 NEXT: Vision Pipeline (recorded-video upload + YOLO person estimate + owner review).
