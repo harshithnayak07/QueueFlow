@@ -19,6 +19,7 @@ from app.schemas.queue import (
     SessionSettingsUpdate,
     SessionStatusOut,
 )
+from app.schemas.token import OwnerTokenOut
 from app.services.waiting_time_service import (
     ACTIVE_TOKEN_STATUSES,
     ESTIMATE_NOTE,
@@ -143,3 +144,21 @@ def activate_virtual_queue(
     db.commit()
     db.refresh(queue_session)
     return queue_session
+
+
+@router.get("/{session_id}/tokens", response_model=list[OwnerTokenOut])
+def list_tokens(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_owner: Owner = Depends(get_current_owner),
+) -> list[Token]:
+    """Owner token list for the dashboard (S5 addition: the proposed API
+    list had no way to SEE virtual tokens). Same ownership guard as the
+    other session routes; ordered by token_number."""
+    queue_session = get_owned_session(session_id, db, current_owner)
+    return (
+        db.query(Token)
+        .filter(Token.session_id == queue_session.id)
+        .order_by(Token.token_number.asc())
+        .all()
+    )

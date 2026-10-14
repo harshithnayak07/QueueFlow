@@ -3,16 +3,16 @@
 This is how future sessions know where we left off. Update at end of each work block.
 
 ## Last updated
-2026-10-14 — S4 Vision Pipeline DONE (53 pytest passed)
+2026-10-14 — S5 Virtual Queue + Tokens DONE (70 pytest passed)
 
 ## SDLC progress
 - [x] Phase 1: Requirements Analysis + Scope Freeze — DONE (see docs/project-context.md §5-7)
 - [x] Phase 2: System Design — DONE (arch, DB, API, vision constraints, see docs/project-context.md §9-12)
 - [x] S1 Foundation: git init, venv (py3.10.10), requirements (fastapi/sqlalchemy/pytest), FastAPI + /health, SQLite base, pytest 1 passed — DONE
 - [x] S2: DB Models + Auth — DONE (owner/session/token/snapshot models, bcrypt + JWT Bearer, register/login/me, ownership guard, 14 pytest passed)
-- [ ] S3: Queue Sessions + Wait Formula — DONE (waiting_time_service, session CRUD/settings/status/activate, 32 pytest passed)
-- [ ] S4: Vision Pipeline (upload + YOLO) — DONE (vision_service median aggregation, analyze-video endpoint, owner-review contract, 53 pytest passed)
-- [ ] S5: Virtual Queue + Tokens
+- [x] S3: Queue Sessions + Wait Formula — DONE (waiting_time_service, session CRUD/settings/status/activate, 32 pytest passed)
+- [x] S4: Vision Pipeline (upload + YOLO) — DONE (vision_service median aggregation, analyze-video endpoint, owner-review contract, 53 pytest passed)
+- [x] S5: Virtual Queue + Tokens — DONE (queue_service, public join/tracking, owner status transitions + token list, 70 pytest passed)
 - [ ] S6: Frontend Owner + Customer
 - [ ] S7: Integration + Docs + Deploy
 
@@ -33,10 +33,12 @@ This is how future sessions know where we left off. Update at end of each work b
 - S4 assumptions: 50MB cap, stride 30 / max 60 frames / conf 0.5 defaults; uploads kept on disk (`data/`, gitignored) with `video_filename` returned — retention policy is a future gap; snapshot wait = vision estimate + active virtual through S3 formula (historical "what-if", not authoritative).
 - S4 YOLO decision: YOLOv8n selected (smallest YOLOv8, CPU-runnable); license = Ultralytics AGPL-3.0 — OK for local MVP, must re-check before commercial hosting; `ultralytics` (torch ~200MB+) NOT installed yet — backend lazy-loads and API returns 503 with install hint until then; unit/API tests inject a stub detector so CI stays light. Installed: `python-multipart` + `opencv-python-headless` (headless = no GUI deps).
 - S4 note: switched new route to FastAPI-0.143 canonical constants (`HTTP_422_UNPROCESSABLE_CONTENT`, `HTTP_413_CONTENT_TOO_LARGE`) — old aliases emit deprecation warnings.
+- S5 DONE: `app/services/queue_service.py` (pure `validate_status_transition` forward-only, `token_people_ahead` = physical + earlier active / 0 when terminal, `recommended_return_at` = now + wait); `app/schemas/token.py` (TokenCreate/TokenStatusUpdate/OwnerTokenOut/PublicTokenCreatedOut/PublicTokenTrackingOut — public schemas never carry contact or internal ids); `app/api/routes/public.py` (POST `/api/public/queue-sessions/{id}/tokens` 201, GET `/api/public/tokens/{tracking_id}`); `app/api/routes/owner_tokens.py` (PATCH `/api/owner/tokens/{id}/status`); owner token list GET `/api/queue-sessions/{id}/tokens` added to queue_sessions router. 70 pytest passed (53 prior + 8 queue-service-unit + 9 token-API).
+- S5 assumptions: join requires open session + virtual enabled (403 if disabled, 409 if closed, 404 unknown session); token_number = max+1 per session with unique-constraint as race arbiter (409 retry); contact = stripped 3–255 chars, no format check; transitions waiting→{called,served,cancelled}, called→{served,cancelled}, served/cancelled terminal, same-status 200 noop, illegal 409; called_at/served_at stamped on first entry; per-token ahead = physical + earlier waiting/called tokens, 0 + no return-time for terminal tokens; tracking GET echoes no tracking_id/contact; owner list endpoint is an S5 addition (proposed API had no way to SEE tokens); deactivation endpoint still a future gap.
 
 ## Open questions for Phase 3+
 - ~~YOLO model version + hardware check (propose YOLOv8n, verify license/install).~~ Resolved S4: YOLOv8n (Ultralytics AGPL-3.0); `ultralytics` install deferred (503-guarded) — needs decision on when to pull torch-weight deps.
 - QR generation library choice.
 
 ## Next step
-S5 NEXT: Virtual Queue + Tokens (secure token creation, public tracking endpoint, owner status transitions, recalculation).
+S6 NEXT: Frontend Owner + Customer (responsive dashboard + mobile tracking page wired to S2–S5 APIs).
