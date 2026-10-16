@@ -130,13 +130,36 @@ function googleReady() {
 }
 
 // Initialize Google Identity Services when its script loads (needs internet).
+// Uses the official rendered button (FedCM-safe). No One Tap prompt() calls:
+// Chrome is removing the prompt status callbacks they depend on.
 window.addEventListener('load', () => {
   try {
     if (googleReady()) {
       google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: onGoogleCredential, use_fedcm_for_prompt: true });
+      renderGoogleButton();
+    } else {
+      googleFallback();
     }
-  } catch (_) { /* offline: the button falls back to the message below */ }
+  } catch (_) { googleFallback(); }
 });
+
+function renderGoogleButton() {
+  const slot = document.getElementById('gSignInBtn');
+  if (!slot) return;
+  try {
+    google.accounts.id.renderButton(slot, {
+      theme: 'outline', size: 'large', shape: 'rectangular',
+      text: 'continue_with', width: Math.min(slot.clientWidth || 300, 400),
+    });
+  } catch (_) { googleFallback(); }
+}
+
+function googleFallback() {
+  const slot = document.getElementById('gSignInBtn');
+  if (slot && !slot.children.length) {
+    slot.innerHTML = '<p class="google-unavailable">Google sign-in needs internet. Email signup works without it.</p>';
+  }
+}
 
 async function finishGoogleSignin(idToken) {
   const r = await fetch(`${API_BASE}/api/auth/google`, {
@@ -184,18 +207,4 @@ async function onGoogleCredential(response) {
   }
 }
 
-document.getElementById('googleButton').addEventListener('click', () => {
-  if (!googleReady()) {
-    showNotice('Google sign-in needs internet (accounts.google.com). Email signup works without it.', true);
-    return;
-  }
-  try {
-    google.accounts.id.prompt((moment) => {
-      if (moment.isNotDisplayed() || moment.isSkippedMoment()) {
-        showNotice('Google sign-in was blocked or dismissed. Allow third-party sign-in and retry, or use email signup.', true);
-      }
-    });
-  } catch (_) {
-    showNotice('Google sign-in needs this page served over http (not file://). Open http://127.0.0.1:8000/ or use email signup.', true);
-  }
-});
+/* Google sign-in runs through the GIS-rendered button above (FedCM-safe). */
