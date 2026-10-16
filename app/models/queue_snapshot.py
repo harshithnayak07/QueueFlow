@@ -28,7 +28,8 @@ class QueueSnapshot(Base):
     estimated_wait_minutes: Mapped[float | None] = mapped_column(
         Float, nullable=True
     )
-    # Where the count came from: "vision" or "manual" (owner correction).
+    # Where the count came from: "vision" (video), "vision-image", or
+    # "manual" (owner correction).
     source: Mapped[str | None] = mapped_column(String(20), nullable=True)
     captured_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False

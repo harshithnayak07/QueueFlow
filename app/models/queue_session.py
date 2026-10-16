@@ -54,6 +54,15 @@ class QueueSession(Base):
     physical_people_remaining: Mapped[int] = mapped_column(
         Integer, default=0, nullable=False
     )
+    # Token-capacity epoch (core queue rule): the confirmed physical count
+    # IS the maximum virtual tokens per snapshot epoch. tokens_issued
+    # counts every token issued in the current epoch — served, cancelled
+    # and expired tokens do NOT free slots. Each owner Apply that sets
+    # physical_people_remaining starts a new epoch with tokens_issued =
+    # current active (waiting/called) count. Added by shim for old DBs.
+    tokens_issued: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
     active_counters: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     average_service_minutes: Mapped[float] = mapped_column(
         Float, default=5.0, nullable=False
@@ -63,6 +72,13 @@ class QueueSession(Base):
     )
     virtual_queue_enabled: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
+    )
+    # Owner-configured token validity: minutes after a token is called
+    # before it expires (options 10/30). Window starts at called_at.
+    # Used by expiry enforcement AND customer display. Default 30
+    # preserves pre-setting behavior. Added by shim for old DBs.
+    validity_minutes: Mapped[int] = mapped_column(
+        Integer, default=30, nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False

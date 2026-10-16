@@ -31,6 +31,13 @@ class OwnerLogin(BaseModel):
     password: str
 
 
+class GoogleLogin(BaseModel):
+    """Google Sign-In: frontend sends the GIS ID token, backend verifies it
+    (signature + aud/iss/exp) before issuing our own JWT."""
+
+    id_token: str = Field(min_length=1, max_length=8192)
+
+
 class OwnerOut(BaseModel):
     id: int
     shop_name: str

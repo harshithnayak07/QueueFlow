@@ -10,7 +10,7 @@ served/cancelled are terminal. Illegal moves are 409, unknown statuses
 stamped on first entry into those states.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -25,7 +25,11 @@ from app.models.token import (
     Token,
 )
 from app.schemas.token import OwnerTokenOut, TokenStatusUpdate
-from app.services.queue_service import validate_status_transition
+from app.services.queue_service import (
+    TOKEN_VALIDITY_MINUTES_AFTER_CALLED,
+    progress_session,
+    validate_status_transition,
+)
 
 router = APIRouter(prefix="/api/owner", tags=["owner-tokens"])
 
@@ -62,8 +66,22 @@ def update_token_status(
         now = datetime.now(timezone.utc)
         if data.status == TOKEN_STATUS_CALLED and token.called_at is None:
             token.called_at = now
+        if data.status == TOKEN_STATUS_CALLED and token.expires_at is None:
+            # Validity window starts when called: the token's own frozen
+            # duration (== its estimated wait at creation), falling back
+            # to the session setting for legacy rows, then 30 minutes.
+            validity = (
+                token.validity_minutes
+                or queue_session.validity_minutes
+                or TOKEN_VALIDITY_MINUTES_AFTER_CALLED
+            )
+            token.expires_at = now + timedelta(minutes=validity)
         if data.status == TOKEN_STATUS_SERVED and token.served_at is None:
             token.served_at = now
         db.commit()
+        # A manual Call joins automatic progression immediately: the
+        # reconciler assigns this token a serving window (owner intent wins
+        # over FIFO) and settles anything overdue in the same pass.
+        progress_session(db, queue_session)
         db.refresh(token)
     return token

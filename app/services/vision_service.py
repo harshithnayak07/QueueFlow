@@ -38,6 +38,8 @@ from typing import Callable, Sequence
 # the byte limit while streaming to disk).
 ALLOWED_VIDEO_EXTENSIONS = frozenset({".mp4", ".mov", ".avi", ".mkv", ".webm"})
 MAX_VIDEO_BYTES = 50 * 1024 * 1024  # 50 MB MVP cap (assumption, S4)
+ALLOWED_IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".webp"})
+MAX_IMAGE_BYTES = 10 * 1024 * 1024  # 10 MB MVP cap (matches upload UI)
 
 ESTIMATE_NOTE = (
     "Approximate computer-vision estimate only — detection errors, "
@@ -60,6 +62,10 @@ class VisionError(Exception):
 
 class InvalidVideoError(VisionError):
     """Upload is not a usable video (bad type, corrupt, unreadable). -> 422."""
+
+
+class InvalidImageError(VisionError):
+    """Upload is not a usable image (bad type, corrupt, unreadable). -> 422."""
 
 
 class VisionUnavailableError(VisionError):
@@ -97,6 +103,26 @@ def validate_video_extension(filename: str | None) -> str:
         raise InvalidVideoError(
             f"Unsupported video type '{ext}'. "
             f"Allowed: {sorted(ALLOWED_VIDEO_EXTENSIONS)}."
+        )
+    return ext
+
+
+def validate_image_extension(filename: str | None) -> str:
+    """Return the lowercase extension, or raise InvalidImageError.
+
+    Same safety contract as video: only the extension is taken from the
+    client filename; the route stores uploads under a server-generated name.
+    """
+    if not filename or "." not in os.path.basename(filename):
+        raise InvalidImageError(
+            "An image file with a supported extension is required "
+            f"({sorted(ALLOWED_IMAGE_EXTENSIONS)})."
+        )
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in ALLOWED_IMAGE_EXTENSIONS:
+        raise InvalidImageError(
+            f"Unsupported image type '{ext}'. "
+            f"Allowed: {sorted(ALLOWED_IMAGE_EXTENSIONS)}."
         )
     return ext
 
@@ -275,3 +301,57 @@ def analyze_video(
         )
     finally:
         cap.release()
+
+
+def analyze_image(
+    image_path: str,
+    detector: Callable[[object], int] | None = None,
+    confidence: float = 0.5,
+    roi: tuple[float, float, float, float] | None = None,
+) -> VisionResult:
+    """Analyze a single queue image file -> VisionResult estimate.
+
+    Same owner-review contract as video: the count is an estimate and the
+    API layer must flag needs_owner_review. ``detector`` maps an OpenCV
+    image (numpy array) to a person count; when None, the YOLOv8n backend
+    is loaded. Raises InvalidImageError (unreadable) or
+    VisionUnavailableError (no cv2 / no backend).
+    """
+    if not 0 < confidence <= 1:
+        raise ValueError("confidence must be in (0, 1]")
+
+    try:
+        import cv2  # type: ignore[import-not-found]
+    except ImportError as exc:
+        raise VisionUnavailableError(
+            "Image analysis is unavailable: OpenCV (cv2) is not installed. "
+            "Install vision requirements to enable image analysis."
+        ) from exc
+
+    if detector is None:
+        detector = default_yolo_detector(confidence=confidence, roi=roi)
+
+    frame = cv2.imread(image_path, cv2.IMREAD_COLOR)
+    if frame is None:
+        raise InvalidImageError(
+            "Could not read the uploaded image. It may be corrupt or in "
+            "an unsupported encoding — try re-exporting as .jpg or .png."
+        )
+    try:
+        count = detector(frame)
+    except VisionUnavailableError:
+        raise
+    except Exception as exc:
+        raise InvalidImageError(
+            f"Detection failed during analysis ({exc})."
+        ) from exc
+    if count is None or count < 0:
+        count = 0
+    count = int(count)
+    return VisionResult(
+        estimated_people=count,
+        frames_sampled=1,
+        per_frame_counts=[count],
+        method="yolov8n-single",
+        confidence_threshold=confidence,
+    )

@@ -29,3 +29,22 @@ class AnalyzeVideoOut(BaseModel):
     physical_people_remaining: int
 
     model_config = {"from_attributes": True}
+
+
+class AnalyzeImageOut(BaseModel):
+    """Single-image analysis: same owner-review contract as video
+    (estimate + needs_owner_review flag, physical_* untouched)."""
+
+    session: SessionOut
+    estimated_people: int
+    frames_sampled: int = 1
+    method: str
+    confidence_threshold: float
+    analyzed_at: datetime
+    estimate_note: str
+    needs_owner_review: bool = True
+    snapshot_id: int
+    image_filename: str
+    physical_people_remaining: int
+
+    model_config = {"from_attributes": True}

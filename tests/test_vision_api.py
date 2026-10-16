@@ -171,7 +171,8 @@ def test_owner_review_flow_confirm_physical(client, upload_dir, monkeypatch):
     status = client.get(
         f"/api/queue-sessions/{sid}/status", headers=headers
     ).json()
-    assert status["people_ahead"] == 6  # waits use confirmed value
+    # Confirmed crowd estimate drives the session view: 6 people ahead.
+    assert status["people_ahead"] == 6
 
 
 # --- auth / ownership ---

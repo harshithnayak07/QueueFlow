@@ -56,18 +56,6 @@ def estimate_wait_minutes(
     return round(people_ahead * average_service_minutes / active_counters, 2)
 
 
-def session_people_ahead(
-    physical_people_remaining: int,
-    waiting_virtual_count: int = 0,
-) -> int:
-    """People ahead of a newcomer = confirmed physical remainder + active virtual tokens."""
-    if physical_people_remaining < 0:
-        raise ValueError("physical_people_remaining must be >= 0")
-    if waiting_virtual_count < 0:
-        raise ValueError("waiting_virtual_count must be >= 0")
-    return physical_people_remaining + waiting_virtual_count
-
-
 def recommend_virtual_queue(
     people_ahead: int,
     virtual_queue_enabled: bool,

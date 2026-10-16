@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QueueFlow AI — Owner Dashboard</title>
+<link rel="stylesheet" href="assets/css/main.css?v=4">
+</head>
+<body class="dashboard">
+<header class="topbar">
+  <div class="brand"><svg viewBox="0 0 48 40" fill="none" aria-hidden="true"><g stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><circle cx="24" cy="9" r="6"/><circle cx="9" cy="15" r="4"/><circle cx="39" cy="15" r="4"/><path d="M12 34v-4c0-6 5-10 12-10s12 4 12 10v4H12Z"/><path d="M3 32v-3c0-4 3-7 7-7m35 10v-3c0-4-3-7-7-7"/></g></svg>QueueFlow <span>AI</span></div>
+  <div class="top-right"><div class="bell" aria-label="Notifications">♧</div><div class="divider"></div><div class="profile"><div class="avatar" id="ownerAvatar">S</div><div><strong id="ownerName">Sri Sai Clinic</strong><small>Owner</small></div><span style="color:#687793">⌄</span></div></div>
+</header>
+<div class="layout">
+  <aside class="sidebar" aria-label="Main navigation">
+    <a href="#dashboard" class="nav active" data-page="dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m3 10 9-7 9 7"/><path d="M5 9v12h5v-7h4v7h5V9"/></svg><span class="nav-text">Dashboard</span></a>
+    <a href="#upload" class="nav" data-page="upload"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 16V4m-5 5 5-5 5 5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg><span class="nav-text">Upload Queue<small>Image / Video</small></span></a>
+    <div class="sidebar-foot"><div class="help-icon">?</div><div><strong>Need Help?</strong><small>QueueFlow support</small></div></div>
+  </aside>
+
+  <main class="main">
+    <section class="page active" id="dashboardPage">
+      <div class="page-head"><div><h1 id="welcomeTitle">Welcome back</h1><p>Here’s your queue overview. Token status and counts update automatically when the backend is connected.</p></div><div class="datebox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg><div><strong id="dateLabel">Today</strong><small id="timeLabel">Queue session</small></div></div></div>
+      <div class="refresh-note" style="margin-bottom:12px"><span class="small-tag" id="sessionPill">No session</span><button class="outline" id="newSessionBtn" type="button">New session</button><button class="outline" id="refreshBtn" type="button">Refresh</button></div>
+      <div class="metrics">
+        <div class="metric"><div class="metric-top"><span class="metric-label">People in Physical Queue</span><div class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="7" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2m2-10a3 3 0 1 0 0-6m1 10a5 5 0 0 1 3 4v2"/></svg></div></div><strong id="peopleMetric">—</strong><div class="metric-foot" id="peopleFoot">From latest image/video analysis</div></div>
+        <div class="metric green"><div class="metric-top"><span class="metric-label">Total Tokens Issued</span><div class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h6m-6 4h6m-6 4h3"/></svg></div></div><strong id="issuedMetric">0</strong><div class="metric-foot">Customers joined this session</div></div>
+        <div class="metric amber"><div class="metric-top"><span class="metric-label">Currently Waiting</span><div class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div></div><strong id="waitingMetric">0</strong><div class="metric-foot">Active waiting tokens</div></div>
+        <div class="metric purple"><div class="metric-top"><span class="metric-label">Estimated Waiting Time</span><div class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div></div><strong id="waitMetric">—</strong><div class="metric-foot">Calculated from queue and counters</div></div>
+        <div class="metric teal"><div class="metric-top"><span class="metric-label">Queue Status</span><div class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20v-7h4v7m4 0V4h4v16m4 0v-5h2v5z"/></svg></div></div><strong class="active-word" id="queueStatusMetric">Not active</strong><div class="metric-foot" id="queueStatusFoot">Activate to let customers join</div></div>
+      </div>
+
+      <section class="card dashboard-flow">
+        <div class="flow-top"><div class="card-head" style="margin:0"><div><h2>Current Queue Flow</h2><p>See a short preview of the next tokens in line.</p></div></div><div class="refresh-note"><span class="green-dot"></span><span id="refreshLabel">Updates when backend is connected</span></div></div>
+        <div class="flow-labels"><span class="current">Now serving</span><span>Next in line</span></div>
+        <div class="flow-track" id="flowTrack">
+          <div class="flow-token current"><strong>—</strong><small>No active token</small></div><span class="flow-arrow">›</span><div class="flow-token"><strong>—</strong><small>Waiting for data</small></div><span class="flow-arrow">›</span><div class="flow-token"><strong>—</strong><small>Waiting for data</small></div><span class="flow-arrow">›</span><div class="flow-more"><strong>···</strong><small>and more</small></div>
+        </div>
+      </section>
+
+      <div class="lower-grid">
+        <section class="card">
+          <div class="card-head"><div><h2>Latest Queue Analysis</h2><p>Most recent image or recorded video analysis.</p></div><button class="outline" id="viewUploadBtn">Upload Queue →</button></div>
+          <div class="analysis-details"><div id="latestImage"><div class="image-placeholder">No queue image/video analyzed yet</div></div><div class="analysis-meta"><div><div class="meta-label">Last analyzed</div><div class="meta-value" id="lastAnalyzed">—</div></div><div><div class="meta-label">Detected people</div><div class="meta-value" id="latestCount">—</div></div><div class="success-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="m7 12 3 3 7-7"/></svg><span id="analysisStatus">Upload an image or video to start analysis.</span></div></div></div>
+        </section>
+        <section class="card">
+          <div class="card-head"><div><h2>QR Code for Customers</h2><p>Customers scan this code to take a queue token.</p></div><span class="queue-state" id="queueStatePill">Not active</span></div>
+          <div class="qr-content"><div class="qr-visual" id="qrVisual"><svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="5"><rect x="8" y="8" width="28" height="28"/><rect x="64" y="8" width="28" height="28"/><rect x="8" y="64" width="28" height="28"/><path d="M16 16h12v12H16zm56 0h12v12H72zM16 72h12v12H16zM48 8h8v8h-8zm0 16h8v8h-8zm0 16h8v8h-8zm16 8h8v8h-8zm16 0h8v8h-8zm-32 8h8v8h-8zm16 8h8v8h-8zm16 8h8v8h-8z"/></svg><div class="qr-lock" id="qrLock">🔒</div></div><div class="qr-copy"><h3 id="qrTitle">Queue not active</h3><p id="qrDescription">Upload and analyze the queue, then activate it to make the customer link available.</p><div class="join-row"><input id="joinLink" readonly value="Available after activation"><button class="copy-btn" id="copyLink" type="button" aria-label="Copy join link">▢</button></div><div class="qr-foot" id="qrFoot">Real QR generation requires backend integration.</div></div></div>
+          <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><button class="primary" id="activateBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m8 5 12 7-12 7V5Z"/></svg>Activate Queue</button><button class="danger" id="deactivateBtn" disabled>Deactivate</button></div>
+        </section>
+      </div>
+    </section>
+
+    <section class="page" id="uploadPage">
+      <div class="page-head"><div><h1>Upload Queue</h1><p>Upload a clear image or recorded video of your physical queue. AI analysis will estimate the queue count.</p></div><div class="datebox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg><div><strong>Queue analysis</strong><small>Image / recorded video</small></div></div></div>
+      <div class="card" style="margin-bottom:17px">
+        <div class="upload-layout">
+          <div><div class="segmented"><button type="button" id="imageMode" class="seg-btn active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>Upload Image</button><button type="button" id="videoMode" class="seg-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg>Upload Video</button></div>
+            <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp" hidden>
+            <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="Select queue image"><div class="drop-icon" id="dropIcon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 16V4m-5 5 5-5 5 5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg></div><strong id="dropTitle">Drag &amp; drop an image here</strong><p>or <button type="button" class="browse" id="browseBtn">click to browse</button></p><small id="fileHelp">Supports JPG, PNG, WEBP · Max 10 MB</small></div>
+            <div class="preview-file" id="previewFile"></div><div class="analyze-row"><button type="button" class="primary" id="analyzeBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m12 3 1.5 5.5L19 10l-5.5 1.5L12 17l-1.5-5.5L5 10l5.5-1.5L12 3Z"/></svg>Analyze Queue</button><button type="button" class="outline" id="clearBtn">Clear</button></div>
+          </div>
+          <div><div class="preview-head"><strong>Preview</strong><button class="outline" id="changeFileBtn">Change File</button></div><div id="previewArea"><div class="preview-empty">Your selected queue image or video will appear here.</div></div><p class="hint">Image = one-time snapshot. Recorded video = analyze multiple sampled frames. Neither means continuous live camera tracking.</p></div>
+        </div>
+      </div>
+      <section class="card"><div class="card-head"><div><h2>Analysis Results</h2><p>Review the count before updating your dashboard.</p></div><span class="small-tag" id="uploadAnalysisBadge">NOT ANALYZED</span></div><div class="results-grid"><div class="result-box"><small>Estimated people</small><strong id="uploadPeople">—</strong><span>Physical queue</span></div><div class="result-box"><small>Estimated wait</small><strong id="uploadWait">—</strong><span>Per customer</span></div><div class="result-box"><small>Queue length</small><strong id="uploadLength">—</strong><span>Optional estimate</span></div><div class="notes-box"><strong>Analysis Notes</strong><ul id="analysisNotes"><li>Upload a file to begin.</li><li>Actual detection requires the AI backend.</li></ul></div></div><div class="analyze-row" style="align-items:flex-end"><div class="field" style="flex:1"><label for="correctedCount">Confirm people count (owner review)</label><input id="correctedCount" type="number" min="0" step="1" placeholder="e.g. 12"></div><div class="field" style="max-width:150px"><label for="avgServiceInput">Avg min / customer</label><input id="avgServiceInput" type="number" min="0" max="1440" step="0.5"></div><button type="button" class="primary" id="applyReviewBtn">Apply</button></div><div class="notice" id="backendNotice">Prototype only: actual AI analysis, database saving, token creation and QR generation require the FastAPI backend.</div></section>
+    </section>
+  </main>
+</div>
+</div>
+<script src="assets/js/notify.js?v=1" defer></script>
+<script src="assets/js/dashboard.js?v=7" defer></script>
+</body>
+</html>

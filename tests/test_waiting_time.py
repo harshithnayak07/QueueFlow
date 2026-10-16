@@ -6,7 +6,6 @@ from app.services.waiting_time_service import (
     ESTIMATE_NOTE,
     estimate_wait_minutes,
     recommend_virtual_queue,
-    session_people_ahead,
 )
 
 
@@ -38,11 +37,16 @@ def test_negative_inputs_rejected():
         estimate_wait_minutes(5, 4.0, -1)
 
 
-def test_people_ahead_sums_physical_and_virtual():
-    assert session_people_ahead(12, 0) == 12
-    assert session_people_ahead(8, 5) == 13
-    with pytest.raises(ValueError):
-        session_people_ahead(-1, 0)
+def test_people_ahead_counts_active_tokens_not_physical():
+    # The session view counts eligible customers in the system. The
+    # confirmed physical count is capacity/backdrop, never added.
+    from app.services.queue_service import queue_ahead_estimate
+
+    ahead, wait = queue_ahead_estimate(
+        [("waiting", None), ("waiting", None)], 5.0, 1)
+    assert (ahead, wait) == (2, 10.0)
+    ahead, wait = queue_ahead_estimate([], 5.0, 1)
+    assert (ahead, wait) == (0, 0.0)
 
 
 def test_recommendation_is_advisory_only():

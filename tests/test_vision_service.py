@@ -158,3 +158,63 @@ def test_default_yolo_detector_missing_backend():
 
     with pytest.raises(VisionUnavailableError):
         default_yolo_detector()
+
+
+# --- analyze_image: single still image ---
+
+
+def _write_tiny_image(path: str) -> None:
+    cv2 = pytest.importorskip("cv2")
+    import numpy as np
+
+    assert cv2.imwrite(path, np.full((64, 64, 3), 128, dtype=np.uint8))
+
+
+def test_validate_image_extension_ok():
+    from app.services.vision_service import validate_image_extension
+
+    assert validate_image_extension("queue.jpg") == ".jpg"
+    assert validate_image_extension("QUEUE.PNG") == ".png"
+    assert validate_image_extension("photo.webp") == ".webp"
+
+
+def test_validate_image_extension_rejects():
+    from app.services.vision_service import (
+        InvalidImageError,
+        validate_image_extension,
+    )
+
+    for bad in (None, "", "noextension", "clip.mp4", "run.exe",
+                "notes.txt", "../evil.jpg.exe"):
+        with pytest.raises(InvalidImageError):
+            validate_image_extension(bad)
+
+
+def test_analyze_image_counts_single_frame(tmp_path):
+    from app.services.vision_service import analyze_image
+
+    image = str(tmp_path / "queue.jpg")
+    _write_tiny_image(image)
+    seen = []
+
+    def stub_detector(frame):
+        seen.append(frame.shape)
+        return 6
+
+    result = analyze_image(image, detector=stub_detector)
+    assert result.frames_sampled == 1
+    assert result.per_frame_counts == [6]
+    assert result.estimated_people == 6
+    assert result.method == "yolov8n-single"
+    assert len(seen) == 1
+
+
+def test_analyze_image_unreadable(tmp_path):
+    from app.services.vision_service import InvalidImageError, analyze_image
+
+    with pytest.raises(InvalidImageError):
+        analyze_image(str(tmp_path / "missing.jpg"), detector=lambda f: 1)
+    corrupt = tmp_path / "corrupt.jpg"
+    corrupt.write_bytes(b"not an image at all")
+    with pytest.raises(InvalidImageError):
+        analyze_image(str(corrupt), detector=lambda f: 1)

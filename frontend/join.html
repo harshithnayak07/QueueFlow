@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QueueFlow AI — Join Queue</title>
+  <link rel="stylesheet" href="assets/css/main.css?v=4" />
+</head>
+<body class="join">
+  <main class="app">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 6.5h10M4 12h7M4 17.5h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="m15 10 5 2-5 2v-4Z" fill="currentColor"/></svg>
+      </span>
+      <span>QueueFlow <span style="color:#2563eb">AI</span></span>
+    </div>
+
+    <section class="card" id="detailsCard">
+      <span class="eyebrow">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3 14.7 8.5 21 9.4l-4.5 4.4 1.1 6.2L12 17l-5.6 3 1.1-6.2L3 9.4l6.3-.9L12 3Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+        QUICK QUEUE ENTRY
+      </span>
+      <h1>Enter your details</h1>
+      <p class="subtitle">Add your name and mobile number to get your queue token.</p>
+
+      <form id="joinForm">
+        <div class="field">
+          <label for="customerName">Your name</label>
+          <input id="customerName" name="customerName" type="text" placeholder="Enter your full name" autocomplete="name" maxlength="80" required />
+        </div>
+        <div class="field">
+          <label for="mobile">Mobile number</label>
+          <div class="phone-wrap">
+            <span class="country-code" aria-label="Country code India">🇮🇳 +91</span>
+            <input id="mobile" name="mobile" type="tel" inputmode="numeric" placeholder="10-digit mobile number" autocomplete="tel-national" maxlength="10" pattern="[6-9][0-9]{9}" title="Enter a valid 10-digit Indian mobile number" required />
+          </div>
+        </div>
+        <button class="primary" type="submit">Get Token <span aria-hidden="true">→</span></button>
+      </form>
+      <p class="privacy">Your mobile number identifies your queue entry.</p>
+    </section>
+
+    <section class="card hidden" id="tokenCard" aria-live="polite">
+      <div class="token-header">
+        <div class="success-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none"><path d="m5 12.5 4.5 4.5L19 7" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <span class="eyebrow">QUEUE ENTRY</span>
+        <h1>You're in the queue!</h1>
+        <p class="subtitle" id="welcomeText" style="margin-bottom:0">Your token preview is ready.</p>
+        <div class="token-number" id="tokenNumber">T042</div>
+        <div class="token-label">YOUR TOKEN NUMBER</div>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <div class="label">People ahead of you</div>
+          <div class="value" id="peopleAhead">8 people</div>
+        </div>
+        <div class="stat">
+          <div class="label">Estimated waiting time</div>
+          <div class="value" id="waitTime">25 min</div>
+        </div>
+      </div>
+
+      <div class="validity">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <div><strong id="validityTitle">Token validity: 30 minutes after you're called.</strong><br />If you don't arrive within the validity window, your token may expire. You can scan the queue QR code again to join.</div>
+      </div>
+
+      <div class="status">
+        <span style="color:#687386">Current status</span>
+        <span class="status-badge" id="statusBadge">Waiting</span>
+      </div>
+      <p class="demo-note">Demo preview only: token number, people ahead, waiting time, status, and expiry are sample values. Live queue data requires the QueueFlow backend.</p>
+      <button class="primary" type="button" id="backButton" style="background:#eff6ff;color:#1d4ed8;box-shadow:none">Back to details</button>
+      <button class="primary" type="button" id="trackButton" style="margin-top:10px">Track Live Status <span aria-hidden="true">→</span></button>
+    </section>
+
+    <div class="footer">Powered by QueueFlow AI</div>
+  </main>
+
+  <script src="assets/js/notify.js?v=1" defer></script>
+  <script src="assets/js/join.js?v=7" defer></script>
+</body>
+</html>

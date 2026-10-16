@@ -1,17 +1,72 @@
 # QueueFlow AI — AI-Powered Virtual Queue Management (MVP)
 
-Responsive web app: recorded-video crowd estimate (OpenCV + YOLO) → wait estimate → owner-controlled virtual token queue via link/QR.
+Responsive web app: recorded image/video crowd estimate (OpenCV + YOLOv8n) → owner-reviewed wait estimate → owner-controlled virtual token queue via link/QR → customer browser tracking page. No app install, no paid APIs, free/local-first.
 
-> Full spec: `docs/project-context.md` | AI session memory: `AGENTS.md` | Progress: `docs/session-state.md`
+> Full spec: `docs/project-context.md` · Agent memory: `AGENTS.md` · Progress: `docs/session-state.md`
 
-## Status
-Phase 1-2 (requirements + design) done. Phase 3 (backend foundation) next — awaiting approval. No app code yet.
+## What it does
 
-## Planned stack
-Frontend: plain HTML/CSS/JS. Backend: Python + FastAPI + SQLAlchemy + SQLite. Vision: OpenCV + YOLO.
+1. Owner signs up / logs in (email + password, or Google Sign-In).
+2. Owner creates a queue session, uploads a queue **image or recorded video**.
+3. YOLOv8n estimates people → owner **reviews and confirms** the count (AI recommends, owner decides).
+4. Owner activates the virtual queue → customers join at `join.html?session=N` (or scan the QR) → get a token.
+5. Tokens **auto-advance**: each serving token completes after the configured average service time; customers track live status, ahead-count, wait, and return time.
+6. One phone number = one token per session; called tokens expire per the validity window.
 
-## How sessions keep context
-OpenCode auto-loads `AGENTS.md` + `opencode.json` instructions on every new session. Keep them updated. Update `docs/session-state.md` at end of each work block.
+## Setup (local)
 
-## Setup (to be added in Phase 3)
-- `python -m venv venv`, install `requirements.txt`, copy `.env.example` → `.env`, run FastAPI, run tests.
+```powershell
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+copy .env.example .env        # edit SECRET_KEY for anything beyond local dev
+.\venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Open `http://127.0.0.1:8000/` (signup), `/login.html`, `/dashboard.html`.
+First run downloads `yolov8n.pt` (~6 MB, gitignored) automatically.
+
+Run tests: `.\venv\Scripts\python.exe -m pytest -q` (127 passed, 1 skipped).
+
+## Configuration (`.env`)
+
+| Key | Default | Notes |
+|---|---|---|
+| `SECRET_KEY` | `change-me-in-env` | **Must be random ≥32 chars in prod** — server refuses to boot with `ENV=prod` otherwise |
+| `ENV` | `dev` | `prod` enforces secret + CORS allowlist |
+| `CORS_ORIGINS` | local origins / `*` in dev | Exact deployed origin(s) in prod |
+| `DATABASE_URL` | `sqlite:///./queueflow.db` | Any SQLAlchemy URL (e.g. PostgreSQL) for prod |
+| `GOOGLE_CLIENT_ID` | shipped default | Public identifier; add your origin to its Authorized JavaScript origins in Google Cloud Console |
+| `UPLOAD_DIR` / `MAX_VIDEO_MB` / `MAX_IMAGE_MB` | `data/uploads` / 50 / 10 | Upload caps enforced while streaming |
+
+## Deploying (production checklist)
+
+```powershell
+# prod example (single worker — see note below)
+$env:ENV="prod"; $env:SECRET_KEY="<random 32+ chars>"; $env:CORS_ORIGINS="https://queue.example.com"
+.\venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+- **Run one worker** (`--workers 1`): join-capacity locks and the progression sweeper are single-process. Multi-worker needs a DB-level guard (documented in code).
+- **Database**: SQLite is fine for local/small use; point `DATABASE_URL` at PostgreSQL for real traffic. No Alembic yet — schema evolves via `ensure_schema_updates()`; adopt real migrations before commercial hosting.
+- **Behind HTTPS + reverse proxy** in production; never expose `--reload`.
+- **YOLO license**: Ultralytics YOLOv8 is AGPL-3.0 — fine for local/internal MVP use, re-check before commercial hosting.
+- **Google Sign-In**: add the deployed origin to the Client ID's Authorized JavaScript origins, or Google blocks the button (401/origin error is Google-side).
+- **First-run**: hit `/health`, create an owner, confirm `yolov8n.pt` downloaded (watch server log once).
+
+## Security posture (audited)
+
+- bcrypt password hashing (72-byte limit enforced at schema); JWT HS256, 12h expiry, no sensitive data in payloads.
+- All owner routes require JWT + per-session ownership check (foreign/missing → bare 404, no existence leak).
+- Customer tracking uses unguessable `token_urlsafe(32)` IDs; public APIs never expose contacts, passwords, internal IDs, or other customers' tokens.
+- Uploads validated by extension + streamed size cap, stored under server-generated names outside git.
+- One token per phone number (canonicalized) enforced app-wide + DB unique index; capacity-gated joins under per-session locks.
+- Secrets via env only (`.env` gitignored); committed `.env.example` documents everything.
+- Known local-MVP trade-offs (documented, not hidden): CORS-`*` in dev only, sequential session IDs enumerable, SQLite, CPU-only YOLO, no rate limiting yet.
+
+## Known limitations
+
+- Owner token Call/Serve/Cancel buttons were removed from the dashboard per owner decision — queue advancement is currently automatic only (manual override API still exists).
+- Customer name is UI-only (no DB column); token validity display text follows the per-token value.
+- Background alerts only work while a customer page is open (no push/SMS).
+- See `docs/session-state.md` for the full decision log.

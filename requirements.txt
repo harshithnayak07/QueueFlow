@@ -1,14 +1,16 @@
-fastapi
-uvicorn[standard]
-sqlalchemy
-pydantic
-pydantic-settings
-pytest
-httpx
-bcrypt
-PyJWT
-python-multipart  # recorded-video upload parsing (UploadFile)
-opencv-python-headless  # S4 video frame sampling (no GUI deps)
-# NOTE (S4): ultralytics (YOLOv8n backend) intentionally NOT pinned yet —
-# it pulls torch (~200MB+ CPU wheel) + model download. The vision service
-# lazy-loads it and returns HTTP 503 with an install hint until then.
+# QueueFlow AI — pinned for reproducible deploys (versions = CI-tested set).
+fastapi==0.143.0
+uvicorn[standard]==0.54.0
+sqlalchemy==2.0.54
+pydantic==2.14.1
+pydantic-settings==2.15.0
+pytest==9.1.1
+httpx==0.28.1
+bcrypt==5.0.0
+PyJWT==2.15.1
+google-auth==2.62.0  # Google Sign-In ID-token verification (official lib, no hand-rolled crypto)
+requests==2.34.2  # HTTP transport used by google-auth cert fetching
+qrcode==8.2  # scannable session join-URL QR PNGs (pillow already present via ultralytics)
+python-multipart==0.0.32  # recorded-video upload parsing (UploadFile)
+opencv-python-headless==5.0.0.93  # S4 video frame sampling (no GUI deps)
+ultralytics==8.4.177  # YOLOv8n person detection (pulls torch CPU ~200MB; ~6MB weights on first run)

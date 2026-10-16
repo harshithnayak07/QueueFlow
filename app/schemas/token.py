@@ -22,10 +22,11 @@ class TokenCreate(BaseModel):
     @field_validator("customer_contact")
     @classmethod
     def contact_must_not_be_blank(cls, v: str) -> str:
-        v = v.strip()
-        if len(v) < 3:
-            raise ValueError("customer_contact must not be blank")
-        return v
+        # Canonical form (phones → +91…, emails → lowercase) so the
+        # one-token-per-number rule compares like with like.
+        from app.services.queue_service import normalize_customer_contact
+
+        return normalize_customer_contact(v)
 
 
 class TokenStatusUpdate(BaseModel):
@@ -46,6 +47,13 @@ class OwnerTokenOut(BaseModel):
     created_at: datetime
     called_at: datetime | None
     served_at: datetime | None
+    # End of the post-call validity window (None until called).
+    expires_at: datetime | None = None
+    # Per-token frozen validity in whole minutes (None on legacy rows).
+    validity_minutes: int | None = None
+    # Automatic progression windows (None until scheduled).
+    service_started_at: datetime | None = None
+    service_ends_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -62,6 +70,8 @@ class PublicTokenCreatedOut(BaseModel):
     estimated_wait_minutes: float | None
     estimate_note: str
     recommended_return_at: datetime | None
+    # Owner-configured validity window (minutes after called) for display.
+    validity_minutes: int
 
 
 class PublicTokenTrackingOut(BaseModel):
@@ -75,3 +85,5 @@ class PublicTokenTrackingOut(BaseModel):
     estimated_wait_minutes: float | None
     estimate_note: str
     recommended_return_at: datetime | None
+    # Owner-configured validity window (minutes after called) for display.
+    validity_minutes: int

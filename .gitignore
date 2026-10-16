@@ -1,6 +1,7 @@
 # Python
 __pycache__/
 *.py[cod]
+.pytest_cache/
 venv/
 .env
 *.db
@@ -9,6 +10,10 @@ venv/
 # Uploads / local data
 data/uploads/
 data/
+
+# YOLO weights + runs (downloaded/cached locally, never commit)
+*.pt
+runs/
 
 # OS / IDE
 .vscode/

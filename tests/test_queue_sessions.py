@@ -127,6 +127,7 @@ def test_status_computes_spec_example_wait(client):
     r = client.get(f"/api/queue-sessions/{sid}/status", headers=headers)
     assert r.status_code == 200, r.text
     body = r.json()
+    # Session view = whole-queue crowd estimate: 12 x 4 / 2 = 24.
     assert body["people_ahead"] == 12
     assert body["estimated_wait_minutes"] == 24.0
     assert "pproximate" in body["estimate_note"]
@@ -145,7 +146,7 @@ def test_status_zero_counters_is_not_computable(client):
     )
     body = client.get(f"/api/queue-sessions/{sid}/status", headers=headers).json()
     assert body["estimated_wait_minutes"] is None
-    assert body["people_ahead"] == 12
+    assert body["people_ahead"] == 12  # crowd still reported, wait unknown
 
 
 def test_status_counts_active_virtual_tokens_ahead(client, db_session):
@@ -175,8 +176,13 @@ def test_status_counts_active_virtual_tokens_ahead(client, db_session):
 
     body = client.get(f"/api/queue-sessions/{sid}/status", headers=headers).json()
     assert body["waiting_virtual_count"] == 2
-    assert body["people_ahead"] == 10  # 8 physical + 2 waiting virtual
-    assert body["estimated_wait_minutes"] == 50.0
+    # Session crowd estimate stays physical-based: 8 x 5 / 1 = 40, even
+    # with virtual tokens present (never added together).
+    assert body["people_ahead"] == 8
+    assert body["estimated_wait_minutes"] == 40.0
+    assert body["token_capacity"] == 8
+    assert body["tokens_issued"] == 0  # direct DB inserts bypass issuance
+    assert body["tokens_remaining"] == 8
 
 
 def test_status_hidden_for_other_owner(client):
@@ -262,3 +268,131 @@ def test_activate_guards_closed_and_foreign_sessions(client):
         f"/api/queue-sessions/{sid}/activate-virtual-queue", headers=h1
     )
     assert r.status_code == 409
+
+
+# --- E3 deactivate: stop joins without closing the session ---
+
+
+def test_deactivate_stops_joins_without_closing(client):
+    headers = _setup_owner(client)
+    sid = _create(client, headers, physical_people_remaining=5).json()["id"]
+
+    # Inactive by default: deactivation is a no-op success.
+    assert client.post(
+        f"/api/queue-sessions/{sid}/deactivate-virtual-queue", headers=headers
+    ).status_code == 200
+
+    assert client.post(
+        f"/api/queue-sessions/{sid}/activate-virtual-queue", headers=headers
+    ).status_code == 200
+    r = client.post(
+        f"/api/queue-sessions/{sid}/deactivate-virtual-queue", headers=headers
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["virtual_queue_enabled"] is False
+    assert r.json()["status"] == "open"  # session NOT closed, tokens kept
+
+    # New joins stop...
+    j = client.post(
+        f"/api/public/queue-sessions/{sid}/tokens",
+        json={"customer_contact": "a@x.com"},
+    )
+    assert j.status_code == 403
+    # ...and re-activation works without losing the session.
+    assert client.post(
+        f"/api/queue-sessions/{sid}/activate-virtual-queue", headers=headers
+    ).status_code == 200
+    assert client.post(
+        f"/api/public/queue-sessions/{sid}/tokens",
+        json={"customer_contact": "a@x.com"},
+    ).status_code == 201
+
+
+def test_deactivate_guards(client):
+    h1 = _setup_owner(client, "d1@shop.com")
+    h2 = _setup_owner(client, "d2@shop.com")
+    sid = _create(client, h1).json()["id"]
+
+    assert client.post(
+        f"/api/queue-sessions/{sid}/deactivate-virtual-queue", headers=h2
+    ).status_code == 404  # foreign session hidden
+    assert client.post(
+        f"/api/queue-sessions/{sid}/deactivate-virtual-queue"
+    ).status_code in (401, 403)
+
+    client.patch(
+        f"/api/queue-sessions/{sid}/settings",
+        json={"status": "closed"},
+        headers=h1,
+    )
+    assert client.post(
+        f"/api/queue-sessions/{sid}/deactivate-virtual-queue", headers=h1
+    ).status_code == 409
+
+
+# --- E4 recommendation threshold is explicit and overridable ---
+
+
+def test_status_threshold_param(client):
+    headers = _setup_owner(client)
+    sid = client.post(
+        "/api/queue-sessions",
+        json={"physical_people_remaining": 6},
+        headers=headers,
+    ).json()["id"]
+    # Threshold compares against the session crowd estimate (physical 6):
+    # below default 10, above an override of 5.
+    default = client.get(
+        f"/api/queue-sessions/{sid}/status", headers=headers
+    ).json()
+    assert default["recommendation_threshold"] == 10
+    assert default["virtual_queue_recommended"] is False
+
+    custom = client.get(
+        f"/api/queue-sessions/{sid}/status",
+        params={"threshold": 5},
+        headers=headers,
+    ).json()
+    assert custom["recommendation_threshold"] == 5
+    assert custom["virtual_queue_recommended"] is True
+
+    assert client.get(
+        f"/api/queue-sessions/{sid}/status",
+        params={"threshold": 0},
+        headers=headers,
+    ).status_code == 422
+
+
+# --- D2 QR code encodes this session's real join URL ---
+
+
+def test_qr_returns_scannable_png_for_session_url(client):
+    import qrcode
+    from io import BytesIO
+
+    headers = _setup_owner(client)
+    sid = _create(client, headers).json()["id"]
+
+    r = client.get(f"/api/queue-sessions/{sid}/qr", headers=headers)
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"] == "image/png"
+    assert r.content[:8] == b"\x89PNG\r\n\x1a\n"
+    assert len(r.content) > 100
+
+    # Byte-identical to a locally generated QR of the exact join URL the
+    # dashboard shows (same lib, deterministic encoding) — proves content.
+    expected = BytesIO()
+    qrcode.make(f"http://testserver/join.html?session={sid}").save(
+        expected, format="PNG"
+    )
+    assert r.content == expected.getvalue()
+
+
+def test_qr_guards(client):
+    h1 = _setup_owner(client, "q1@shop.com")
+    h2 = _setup_owner(client, "q2@shop.com")
+    sid = _create(client, h1).json()["id"]
+
+    assert client.get(f"/api/queue-sessions/{sid}/qr", headers=h2).status_code == 404
+    assert client.get(f"/api/queue-sessions/{sid}/qr").status_code in (401, 403)
+    assert client.get("/api/queue-sessions/999999/qr", headers=h1).status_code == 404

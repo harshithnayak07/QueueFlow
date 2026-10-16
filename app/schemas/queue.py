@@ -32,6 +32,8 @@ class SessionSettingsUpdate(BaseModel):
     physical_people_remaining: int | None = Field(default=None, ge=0)
     people_count: int | None = Field(default=None, ge=0)
     status: Literal["open", "closed"] | None = None
+    # Owner-configured token validity window (minutes after called).
+    validity_minutes: Literal[10, 30] | None = None
 
 
 class SessionOut(BaseModel):
@@ -43,6 +45,7 @@ class SessionOut(BaseModel):
     average_service_minutes: float
     status: str
     virtual_queue_enabled: bool
+    validity_minutes: int
     created_at: datetime
     updated_at: datetime
 
@@ -64,5 +67,11 @@ class SessionStatusOut(BaseModel):
     virtual_queue_recommended: bool
     recommendation_reason: str
     recommendation_threshold: int
+    # Core queue rule dashboard data: capacity IS the confirmed physical
+    # count; issued counts every token of the current epoch (served /
+    # cancelled / expired do not free slots); remaining is capacity-issued.
+    token_capacity: int
+    tokens_issued: int
+    tokens_remaining: int
 
     model_config = {"from_attributes": True}

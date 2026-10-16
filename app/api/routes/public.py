@@ -13,6 +13,7 @@ ids. Unknown tracking ids are a bare 404.
 """
 
 from datetime import datetime
+import threading
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
@@ -21,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.database.session import get_db
 from app.models.queue_session import QueueSession
-from app.models.token import Token
+from app.models.token import TOKEN_STATUS_CALLED, Token
 from app.schemas.token import (
     PublicTokenCreatedOut,
     PublicTokenTrackingOut,
@@ -29,45 +30,76 @@ from app.schemas.token import (
 )
 from app.services.queue_service import (
     TERMINAL_TOKEN_STATUSES,
+    expire_overdue_tokens,
+    progress_session,
+    queue_ahead_estimate,
     recommended_return_at,
-    token_people_ahead,
+    validity_for_estimate,
 )
 from app.services.waiting_time_service import (
     ACTIVE_TOKEN_STATUSES,
     ESTIMATE_NOTE,
-    estimate_wait_minutes,
 )
 
 router = APIRouter(prefix="/api/public", tags=["public"])
 
 
-def _earlier_active_count(db: Session, session_id: int, token_number: int) -> int:
-    return (
-        db.query(Token)
+# Per-session join locks: the capacity check + insert + commit in
+# create_token runs inside one of these, so concurrent joins in this
+# process cannot both pass the check. Single-process MVP scope — a
+# multi-worker deploy needs a DB-level guard instead.
+_JOIN_LOCKS: dict[int, threading.Lock] = {}
+_JOIN_LOCKS_GUARD = threading.Lock()
+
+
+def _session_join_lock(session_id: int) -> threading.Lock:
+    with _JOIN_LOCKS_GUARD:
+        lock = _JOIN_LOCKS.get(session_id)
+        if lock is None:
+            lock = threading.Lock()
+            _JOIN_LOCKS[session_id] = lock
+        return lock
+
+
+def _earlier_active_rows(
+    db: Session, session_id: int, token_number: int
+) -> list[tuple[str, object]]:
+    """(status, service_ends_at) of active tokens ahead of one token."""
+    return [
+        (status, ends_at)
+        for status, ends_at in db.query(Token.status, Token.service_ends_at)
         .filter(
             Token.session_id == session_id,
             Token.status.in_(ACTIVE_TOKEN_STATUSES),
             Token.token_number < token_number,
         )
-        .count()
-    )
+        .order_by(Token.token_number.asc())
+        .all()
+    ]
 
 
 def _live_estimate(
-    queue_session: QueueSession, own_status: str, earlier_active: int
+    db: Session, queue_session: QueueSession, token: Token
 ) -> tuple[int, float | None, datetime | None]:
-    """(people_ahead, estimated_wait, recommended_return_at)."""
-    ahead = token_people_ahead(
-        queue_session.physical_people_remaining, earlier_active, own_status
-    )
-    wait = estimate_wait_minutes(
-        ahead,
+    """(people_ahead, estimated_wait, recommended_return_at) via the one
+    shared queue_ahead_estimate rule: eligible customers ahead, remaining
+    service of in-service ones plus full durations for the rest."""
+    if token.status in TERMINAL_TOKEN_STATUSES:
+        # Nothing to return for: the visit is over (or cancelled).
+        ahead, wait = queue_ahead_estimate(
+            [],
+            queue_session.average_service_minutes,
+            queue_session.active_counters,
+        )
+        return ahead, wait, None
+    earlier = _earlier_active_rows(db, token.session_id, token.token_number)
+    ahead, wait = queue_ahead_estimate(
+        earlier,
         queue_session.average_service_minutes,
         queue_session.active_counters,
+        None,
+        token.service_ends_at if token.status == TOKEN_STATUS_CALLED else None,
     )
-    if own_status in TERMINAL_TOKEN_STATUSES:
-        # Nothing to return for: the visit is over (or cancelled).
-        return ahead, wait, None
     return ahead, wait, recommended_return_at(wait)
 
 
@@ -98,43 +130,121 @@ def create_token(
             detail="The virtual queue is not active for this session yet.",
         )
 
-    # Next human-facing number within this session (1-based). The unique
-    # constraint uq_token_session_number is the final arbiter under races.
-    top = (
-        db.query(func.max(Token.token_number))
-        .filter(Token.session_id == session_id)
-        .scalar()
-    )
-    next_number = (top or 0) + 1
-    earlier_active = (
-        db.query(Token)
-        .filter(
-            Token.session_id == session_id,
-            Token.status.in_(ACTIVE_TOKEN_STATUSES),
+    # E2 lazy expiry: overdue called tokens stop counting as ahead, so a
+    # newcomer's estimate is correct even if nobody refreshed lately.
+    expire_overdue_tokens(db, session_id)
+
+    # Core capacity rule: the confirmed physical count IS the maximum
+    # virtual tokens per snapshot epoch. Served/cancelled/expired tokens
+    # do NOT free slots — only a new owner Apply starts a new epoch.
+    # The whole check-and-insert below runs under a per-session lock so
+    # concurrent joins cannot slip past the limit (single-process MVP;
+    # multi-worker deploys need a DB-level guard instead).
+    with _session_join_lock(session_id):
+        db.refresh(queue_session)
+        capacity = queue_session.physical_people_remaining
+        if capacity <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="The queue capacity is not confirmed yet. "
+                "Please wait for the counter to confirm the queue.",
+            )
+        # One token per phone number per session (contact already in
+        # canonical form from TokenCreate). Any existing row — waiting,
+        # called, served, cancelled or expired — blocks a second token.
+        # Inside the join lock with the insert below, so concurrent
+        # same-number joins cannot both pass.
+        existing = (
+            db.query(Token)
+            .filter(
+                Token.session_id == session_id,
+                Token.customer_contact == data.customer_contact,
+            )
+            .first()
         )
-        .count()
-    )
+        if existing is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"This phone number already has token "
+                f"#{existing.token_number} in this session.",
+            )
+        if queue_session.tokens_issued >= capacity:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Queue is full for this session. "
+                "No more tokens can be issued.",
+            )
 
-    token = Token(
-        session_id=session_id,
-        token_number=next_number,
-        customer_contact=data.customer_contact,
-        status="waiting",
-    )
-    db.add(token)
-    try:
-        db.commit()
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Could not issue a token number; please retry.",
-        ) from exc
-    db.refresh(token)
+        # Next human-facing number within this session (1-based). The unique
+        # constraint uq_token_session_number stays as the final arbiter.
+        top = (
+            db.query(func.max(Token.token_number))
+            .filter(Token.session_id == session_id)
+            .scalar()
+        )
+        next_number = (top or 0) + 1
 
-    ahead, wait, return_at = _live_estimate(
-        queue_session, token.status, earlier_active
-    )
+        # Per-token validity frozen at creation: it IS the estimated wait
+        # just computed for this newcomer (whole minutes, min 1), so the
+        # number shown on the join page and the enforced window are one
+        # and the same. Uncomputable waits fall back to the session setting.
+        earlier_rows = [
+            (status, ends_at)
+            for status, ends_at in db.query(Token.status, Token.service_ends_at)
+            .filter(
+                Token.session_id == session_id,
+                Token.status.in_(ACTIVE_TOKEN_STATUSES),
+            )
+            .order_by(Token.token_number.asc())
+            .all()
+        ]
+        _, join_wait = queue_ahead_estimate(
+            earlier_rows,
+            queue_session.average_service_minutes,
+            queue_session.active_counters,
+        )
+        validity = validity_for_estimate(
+            join_wait, queue_session.validity_minutes
+        )
+
+        token = Token(
+            session_id=session_id,
+            token_number=next_number,
+            customer_contact=data.customer_contact,
+            status="waiting",
+            validity_minutes=validity,
+        )
+        db.add(token)
+        # Epoch consumption: every issuance counts, even if this token is
+        # later served/cancelled/expired. Only a new owner Apply resets it.
+        queue_session.tokens_issued = queue_session.tokens_issued + 1
+        try:
+            db.commit()
+        except IntegrityError as exc:
+            # Lost a race despite the lock (e.g. multi-worker deploy):
+            # re-read to report WHICH rule fired instead of guessing.
+            db.rollback()
+            dupe = (
+                db.query(Token)
+                .filter(
+                    Token.session_id == session_id,
+                    Token.customer_contact == data.customer_contact,
+                )
+                .first()
+            )
+            if dupe is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"This phone number already has token "
+                    f"#{dupe.token_number} in this session.",
+                ) from exc
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Could not issue a token number; please retry.",
+            ) from exc
+        db.refresh(token)
+
+    ahead, wait, return_at = _live_estimate(db, queue_session, token)
     return PublicTokenCreatedOut(
         session_id=session_id,
         token_number=token.token_number,
@@ -144,6 +254,7 @@ def create_token(
         estimated_wait_minutes=wait,
         estimate_note=ESTIMATE_NOTE,
         recommended_return_at=return_at,
+        validity_minutes=token.validity_minutes,
     )
 
 
@@ -166,12 +277,12 @@ def track_token(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Token not found",
         )
-    earlier_active = _earlier_active_count(
-        db, token.session_id, token.token_number
-    )
-    ahead, wait, return_at = _live_estimate(
-        queue_session, token.status, earlier_active
-    )
+    # E2 lazy expiry before computing this token's own numbers, so an
+    # overdue "called" flips to "expired" on the next poll. Progression
+    # runs first so a finished service wins over the validity sweep.
+    progress_session(db, queue_session)
+    db.refresh(token)
+    ahead, wait, return_at = _live_estimate(db, queue_session, token)
     return PublicTokenTrackingOut(
         session_id=token.session_id,
         token_number=token.token_number,
@@ -180,4 +291,7 @@ def track_token(
         estimated_wait_minutes=wait,
         estimate_note=ESTIMATE_NOTE,
         recommended_return_at=return_at,
+        validity_minutes=(
+            token.validity_minutes or queue_session.validity_minutes
+        ),
     )
