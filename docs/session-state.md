@@ -3,7 +3,7 @@
 This is how future sessions know where we left off. Update at end of each work block.
 
 ## Last updated
-2026-10-15 — Dashboard wait restored (two-view semantics; 129 pytest)
+2026-10-16 — Published to GitHub (private harshithnayak07/QueueFlow, commit e9447c0, 47 files, tree clean)
 
 ## SDLC progress
 - [x] Phase 1: Requirements Analysis + Scope Freeze — DONE (see docs/project-context.md §5-7)

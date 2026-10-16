@@ -47,6 +47,17 @@ $env:ENV="prod"; $env:SECRET_KEY="<random 32+ chars>"; $env:CORS_ORIGINS="https:
 .\venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
+### Deploy to Render (free blueprint included)
+
+`render.yaml` + `.python-version` are committed. In the Render Dashboard:
+**New → Blueprint → select harshithnayak07/QueueFlow → Apply.**
+`SECRET_KEY` auto-generates; health check is `/health`.
+
+- **Free tier reality check:** 512 MB RAM runs auth/queue/tokens/tracking, but YOLO analysis loads torch and will likely OOM-crash the worker. Upgrade the service to a 2 GB plan if you need Analyze online, or accept 503s there.
+- Free services **sleep after 15 min idle** (~1 min wake-up) and **restart anytime**; SQLite data resets on redeploy/restart — fine for demo, not for real queues. Add Render Postgres + set `DATABASE_URL` for persistence.
+- After deploy, add your `https://<you>.onrender.com` origin to the Google Client ID's Authorized JavaScript origins (else the Google button is blocked), and update `CORS_ORIGINS` if the hostname differs.
+- First visit: sign up the owner at `/` — `yolov8n.pt` downloads itself on first analysis.
+
 - **Run one worker** (`--workers 1`): join-capacity locks and the progression sweeper are single-process. Multi-worker needs a DB-level guard (documented in code).
 - **Database**: SQLite is fine for local/small use; point `DATABASE_URL` at PostgreSQL for real traffic. No Alembic yet — schema evolves via `ensure_schema_updates()`; adopt real migrations before commercial hosting.
 - **Behind HTTPS + reverse proxy** in production; never expose `--reload`.

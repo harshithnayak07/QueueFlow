@@ -1,0 +1,37 @@
+# Render Blueprint — QueueFlow AI (FastAPI backend + served frontend, one service).
+# Deploy: Render Dashboard → New → Blueprint → select harshithnayak07/QueueFlow → Apply.
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: queueflow-ai
+    runtime: python
+    # Free tier works for auth/queue/tokens/tracking. YOLO analysis loads
+    # torch (~500MB+ RSS) and will OOM on 512MB: upgrade to plan 1c-2g
+    # (Starter, 2 GB) if "Analyze" crashes the worker.
+    plan: free
+    buildCommand: >-
+      pip install --upgrade pip &&
+      pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu &&
+      pip install -r requirements.txt
+    # NOTE: requirements.txt pins torch==2.14.1, but the CPU index serves
+    # the same version for cp310 — pip keeps the pre-installed CPU build
+    # and installs the rest (incl. ultralytics) from PyPI.
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # Python version comes from .python-version (3.10, latest patch).
+      - key: ENV
+        value: prod
+      - key: SECRET_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        # Same-origin frontend needs no CORS; keep the deployed URL listed.
+        # If Render assigns a different hostname, update this to match it.
+        value: https://queueflow-ai.onrender.com
+      # SQLite by default (ephemeral on Render: data resets on redeploy/
+      # restart — fine for demo, NOT for real queues). For persistence add a
+      # Render Postgres and set DATABASE_URL to its Internal Database URL
+      # (plus psycopg2-binary in requirements).
+      # - key: DATABASE_URL
+      #   sync: false
